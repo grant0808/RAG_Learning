@@ -1,15 +1,17 @@
-
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint, HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.tools import tool
 from langchain.agents import create_agent
-
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.document_loaders import PyMuPDFLoader
+from langgraph.graph import StateGraph, END
 
 from bs4 import BeautifulSoup, SoupStrainer
 
 from dotenv import load_dotenv
+from typing import List, TypedDict
 import requests
 import os
 
@@ -33,11 +35,33 @@ vector_store = Chroma(
     persist_directory="./chroma_langchain_db",
 )
 
+retriver = vector_store.as_retriever(search_kwargs={"k": 3})
+
+class GraphState(TypedDict):
+    question: str
+    document: List[Document]
+    web_search: bool
+    generation: str
+
+def question(state: GraphState) -> dict:
+    question = state['question']
+    document = retriver.invoke(question)
+    return {"document": document, "web_search": False}
+
 def load_web_page(url: str, bs_kwargs: dict | None = None) -> list[Document]:
     response = requests.get(url)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser", **(bs_kwargs or {}))
     return [Document(page_content=soup.get_text(), metadata={"source": url})]
+
+def generate_pdf_document(pdf_path: str):
+    loader = PyMuPDFLoader(pdf_path, extract_images=True, extract_tables=True)
+    docs = loader.load()
+
+    print(docs[4].page_content[:300])
+    
+    pass
+
 
 bs4_strainer = SoupStrainer(class_=("post-title", "post-header", "post-content"))
 docs=load_web_page(
