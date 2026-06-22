@@ -8,5 +8,5 @@ wheels/
 .vscode
 # Virtual environments
 .venv
-
 .env
+chroma_db_tutorial
